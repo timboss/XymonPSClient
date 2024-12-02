@@ -40,8 +40,8 @@ $xymondir = split-path -parent $MyInvocation.MyCommand.Definition
 
 # -----------------------------------------------------------------------------------
 
-$Version = '2.43'
-$XymonClientVersion = "${Id}: xymonclient.ps1  $Version 2024-12-02 tim.boughen@gmail.com"
+$Version = '2.42'
+$XymonClientVersion = "${Id}: xymonclient.ps1  $Version 2019-03-11 zak.beck@accenture.com"
 # detect if we're running as 64 or 32 bit
 $XymonRegKey = $(if([System.IntPtr]::Size -eq 8) { "HKLM:\SOFTWARE\Wow6432Node\XymonPSClient" } else { "HKLM:\SOFTWARE\XymonPSClient" })
 $XymonClientCfg = join-path $xymondir 'xymonclient_config.xml'
@@ -1028,7 +1028,6 @@ function XymonInit
     $script:clientlocalcfg = ""
     $script:logfilepos = @{}
     $script:externals = @{}
-    $script:hashes = @{}
     $script:diskpartData = ''
     $script:LastTransmissionMethod = 'Unknown'
 
@@ -1721,7 +1720,6 @@ function XymonMsgs
                         $output = @()
                         foreach ($entry in $logentries)
                         {
-                            $entry.Message = $entry.Message -replace '"', ""
                             if ($filterMode -eq 'exclude')
                             {
                                 $excludeItem = $false
@@ -2794,7 +2792,7 @@ function XymonProcessExternalData
                 # so replicate that behaviour
                 if ($f.Name -match '\.')
                 {
-                    #continue
+                    continue
                 }
                 # a valid filename is either just the test name: testname
                 # or testname^hostname, to allow sending results from a different 
@@ -2836,25 +2834,11 @@ function XymonProcessExternalData
                     }
 
                     # match:
-                    # rrd title ($matches[1])
-                    # remainder ($matches[2])
-                    if ($statusFileContent -match '^(\[\w*\.rrd\])([\s\S]+)$')
-                    {
-
-                        $msg = 'data'
-                        $testName = 'trends'
-
-                        $msg += (' {0}.{1} {2}' -f $hostName, $testName, $statusFileContent)
-                        
-                        WriteLog "Sending Xymon data message for file $($f.Name) - test $($testName), host $($hostName): $msg"
-                        XymonSend $msg $script:XymonSettings.serversList
-                    }
-                    # match:
                     # colour ($matches[1])
                     # optionally + and any non-space chars ($matches[2])
                     # space
                     # remainder ($matches[3])
-                    elseif ($statusFileContent -match '^(red|yellow|green|clear)(?:\+([^ ]+))? ([\s\S]+)$')
+                    if ($statusFileContent -match '^(red|yellow|green|clear)(?:\+([^ ]+))? ([\s\S]+)$')
                     {
                         $groupColour = $matches[1]
                         $lifeSpan = $matches[2]
@@ -2867,7 +2851,7 @@ function XymonProcessExternalData
                         }
                         $msg += (' {0}.{1} {2} {3}' -f $hostName, $testName, $groupColour, $statusMessage)
                         
-                        WriteLog "Sending Xymon status message for file $($f.Name) - test $($testName), host $($hostName): $msg"
+                        WriteLog "Sending Xymon message for file $($f.Name) - test $($testName), host $($hostName): $msg"
                         XymonSend $msg $script:XymonSettings.serversList
                     }
                     else
@@ -3282,7 +3266,6 @@ function XymonClientConfig($cfglines)
                 -or $l -match '^noservicecheck:' `
                 -or $l -match '^enablediskpart' `
                 -or $l -match '^maxloop' `
-                -or $l -match '^hash' `
                 )
             {
                 WriteLog "Found a command: $l"
@@ -3564,7 +3547,7 @@ function XymonCheckUpdate
 {
     WriteLog "Executing XymonCheckUpdate"
     $updates = @($script:clientlocalcfg_entries.keys | `
-        where { $_ -match '^clientversion:(\d+\.*\d+\.*\d+):(.+?)(?::(MD5|SHA1|SHA256):([0-9a-f]+))?$' })
+        where { $_ -match '^clientversion:(\d+\.\d+):(.+?)(?::(MD5|SHA1|SHA256):([0-9a-f]+))?$' })
     if ($updates.length -gt 1)
     {
         WriteLog "ERROR: more than one clientversion directive in config!"
@@ -3576,7 +3559,7 @@ function XymonCheckUpdate
         # $matches[3] = (optional) hash type
         # $matches[4] = (optional) hash value
 
-        if ([System.Version]$Version -lt [System.Version]$matches[1])
+        if ($Version -lt $matches[1])
         {
             WriteLog "Running version $Version; config version $($matches[1]); attempting upgrade"
 
@@ -3744,32 +3727,11 @@ function XymonManageExternals
     WriteLog "Executing XymonManageExternals"
     $externalConfig = @($script:clientlocalcfg_entries.keys | `
         where { $_ -match '^external:' })
-    $externalHash = @($script:clientlocalcfg_entries.keys | `
-        where { $_ -match '^hash:' })
-
-    $hashes = @{}
-    foreach ($hash in $externalHash)
-    {
-        if ($hash -match '^hash:(.+?):([0-9a-f]+)?')
-        {
-            # $matches[1] = script
-            # $matches[2] = hash value
-            ($externalScript, $hashRequired ) = $matches[1..2]
-            $hashes.Add( "$externalScript", "$hashRequired")
-
-            WriteLog "storing Hash : $externalScript : $hashRequired"
-        }
-        else
-        {
-            WriteLog "md5 directive does not match expected format: $md5"
-        }
-    } # foreach ... md5
-
     $script:externals = @()
 
     foreach ($external in $externalConfig)
     {
-        if ($external -match '^external:(?:(\d+):)?(slowscan|everyscan):(sync|async):(.+?)(?:\|(MD5|SHA1|SHA256)\|([0-9a-f]+|{hash}))?(?:\|(.+)\|(.+))?$')
+        if ($external -match '^external:(?:(\d+):)?(slowscan|everyscan):(sync|async):(.+?)(?:\|(MD5|SHA1|SHA256)\|([0-9a-f]+))?(?:\|(.+)\|(.+))?$')
         {
             # $matches[1] = priority (optional) 0-99
             # $matches[2] = slowscan/everyscan
@@ -3804,14 +3766,6 @@ function XymonManageExternals
             if ($process -eq $null)
             {
                 $process = $externalFullName
-            }
-            if ( $hashes.ContainsKey($externalScriptName) ) {
-                if ($hashRequired -ne $null)
-                {
-                    if ( $hashRequired -eq '{hash}' ) {
-                        $hashRequired = $($hashes[$externalScriptName])
-                    }
-                }
             }
             $externalInfo = @{ Fullname = $externalFullName; `
                 ExecutionFrequency = $executionFrequency; `

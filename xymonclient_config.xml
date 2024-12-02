@@ -1,0 +1,19 @@
+<XymonSettings>
+
+  <servers>xymonserver.domain.com</servers>
+  <clientname>xymonclient.local</clientname>
+
+  <clientlogfile>c:\program files\xymonpsclient\xymonclient.log</clientlogfile>
+  <clientconfigfile>c:\program files\xymonpsclient\clientconfig.cfg</clientconfigfile>
+  <externalscriptlocation>c:\program files\xymonpsclient\ext</externalscriptlocation>
+  <externaldatalocation>c:\program files\xymonpsclient\tmp</externaldatalocation>
+
+  <clientsoftware>powershell</clientsoftware>
+  <clientclass>powershell</clientclass>
+
+  <clientfqdn>0</clientfqdn>
+  <clientlower>1</clientlower>
+  <clientremotecfgexec>1</clientremotecfgexec>
+
+  <wanteddisks>2 3</wanteddisks>
+</XymonSettings>
